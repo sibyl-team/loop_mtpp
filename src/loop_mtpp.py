@@ -23,7 +23,7 @@ from lib.slim_dynamics import DiseaseModel
 from mtpp_utils import contacts_cg, get_households_contacts
 from analysis_utils import ranker_I, check_fn_I, ranker_IR, check_fn_IR, roc_curve, events_list
 #from abm_utils import status_to_state, listofhouses, dummy_logger, quarantine_households
-from abm_utils import dummy_logger
+from mtpp_utils import dummy_logger
 
 status_legend = {'susc': 0, 'expo': 10, 'ipre': 11, 'isym': 12, 'iasy': 13,  'hosp':19, 'resi': 20, 'dead': 21} #,'quar':30}
 status_legend_inv = {0:'susc', 10: 'expo', 11: 'ipre', 12: 'isym', 13: 'iasy', 19:'hosp', 20:'resi', 21: 'dead'} #,30: 'quar'}

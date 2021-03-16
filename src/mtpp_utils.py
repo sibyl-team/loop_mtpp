@@ -1,5 +1,11 @@
 import numpy as np, pandas as pd
 
+class dummy_logger():
+    def __init__(self):
+        self.description = "This shape has not been described yet"
+    def info(self, s):
+        return True
+
 
 def contacts_cg(mob, t_res, t_unit, first_filter = True):
     # check asymmetric contacts (same t_from and different t_to OR same t_to and different t_from). Take as t_from the minimum
