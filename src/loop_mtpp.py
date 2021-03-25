@@ -1,6 +1,6 @@
 from pathlib import Path
 import sys 
-
+import time
 import json
 import random
 import pandas as pd
@@ -163,13 +163,16 @@ def loop_mtpp(mob,
     
     t = 0
     sim.t0 = 0
+    start_time = time.time()
     for t in range(T):
         th = t*t_unit
         ### advance one time step
         
         sim.run_one_step_dyn(th + delta_th, excluded)
-        status_dict, status = get_status(sim,th+delta_th,N)
+        #print("One step dynamics", time.time() - start_time)
+        #start_time = time.time()
 
+        status_dict, status = get_status(sim,th+delta_th,N)
         state = status_to_state(status) ## 0, 1, 2, 3 (quar)
         data_states["true_conf"][t] = state
         data_states["statuses"][t] = status
@@ -180,12 +183,6 @@ def loop_mtpp(mob,
         if t == initial_steps:
             logger.info("\nobservation-based inference algorithm starts now\n")
         logger.info(f'time:{t}')
-        ### extract contacts
-        daily_contacts = contacts_df[['i','j','t','lambda']][contacts_df['t'] == t].to_records(index = False)
-        #daily_contacts = [x for x in daily_contacts if status[x[0]]!=status_legend['quar'] or status[x[1]]!=status_legend['quar']] # drop contacts of quarantined nodes
-        
-        # TO DO: figure out what to do with hospitalised nodes and
-        logger.info(f"number of unique contacts: {len(daily_contacts)}")
         
         ### compute potential test results for all
         if fp_rate or fn_rate:
@@ -193,7 +190,6 @@ def loop_mtpp(mob,
             f_state = (state==1)*(noise > fn_rate) + (state==0)*(noise < fp_rate) + 2*(state==2)
         else:
             f_state = state
-        
         to_quarantine = []
         all_test = []
         excluded_now = excluded.copy()
@@ -233,15 +229,26 @@ def loop_mtpp(mob,
         if t < initial_steps:
             daily_obs = []
             num_test_algo_today = 0            
-        
-        weighted_contacts = [c for c in daily_contacts if (has_app[c[0]] and has_app[c[1]]) and (c[0] not in all_quarantined and c[1] not in all_quarantined)]
+
+
+        ### extract contacts
+        daily_contacts = contacts_df[['i','j','t','lambda']][(contacts_df['t'] == t) 
+                                                                & (contacts_df["i"].isin(all_quarantined) == False) 
+                                                                & (contacts_df["j"].isin(all_quarantined) == False)].to_records(index = False)
+        #print("Daily contacts ", time.time() - start_time)
+        #start_time = time.time()
+        logger.info(f"number of unique contacts: {len(daily_contacts)}")
+        #weighted_contacts = [c for c in daily_contacts if (has_app[c[0]] and has_app[c[1]]) and (c[0] not in all_quarantined and c[1] not in all_quarantined)]
+        weighted_contacts = [c for c in daily_contacts if (has_app[c[0]] and has_app[c[1]])]
+        #print("Weighted contacts ", time.time()-start_time)
+        #start_time = time.time()
         rank_algo = inference_algo.rank(t, weighted_contacts, daily_obs, data)
         rank = np.array(sorted(rank_algo, key= lambda tup: tup[1], reverse=True))
         rank = [int(tup[0]) for tup in rank]
-        
         ### test num_test_algo_today individuals
         test_algo = test_and_quarantine(rank, num_test_algo_today)
-
+        #print("Quarantine ", time.time() - start_time)
+        #start_time = time.time()
         ### compute roc now, only excluding past tests
         eventsI = events_list(t, [(i,1,t) for (i,tf) in enumerate(excluded) if tf], data_states["true_conf"], check_fn = check_fn_I)
         xI, yI, aurI, sortlI = roc_curve(dict(rank_algo), eventsI, lambda x: x)
@@ -309,8 +316,10 @@ def loop_mtpp(mob,
         if t % save_every_iter == 0:
             df_save = pd.DataFrame.from_records(data, exclude=["logger"])
             df_save.to_csv(output_dir + name_file_res + "_res.gz")
-
+        #print("Update everything ", time.time() - start_time)
+        #start_time = time.time()
     # save files
+    print("Time ", time.time() - start_time)
     del sim
     df_save = pd.DataFrame.from_records(data, exclude=["logger"])
     df_save.to_csv(output_dir + name_file_res + "_res.gz")
@@ -380,14 +389,20 @@ def free_mtpp(mob,
     excluded = np.zeros(N, dtype=bool)
     t = 0
     sim.t0 = 0
+    start_time = time.time()
     for t in range(T):
         th = t*t_unit
         ### advance one time step
 
+
         sim.run_one_step_dyn(th + delta_th, excluded)
+
+        #print("One step dynamics", time.time() - start_time)
+        #start_time = time.time()
+
         status_dict, status = get_status(sim,th+delta_th,N)
         state = status_to_state(status) ## 0, 1, 2, 3 (quar)
-
+ 
         nS, nI, nR = (state == 0).sum(), (state == 1).sum(), (state == 2).sum()
         if nI == 0 and stop_zero_I:
             logger.info("stopping simulation as there are no more infected individuals")
@@ -400,11 +415,16 @@ def free_mtpp(mob,
         data["infected_free"][t] = nI
         data["num_quarantined"][t] = num_quarantined
         
+        #print("Quarantine ", time.time() - start_time)
+        #start_time = time.time()
         ### callback
         callback(data)
 
         if t % save_every_iter == 0:
             df_save = pd.DataFrame.from_records(data, exclude=["logger"])
+
+        #print("Update everything ", time.time() - start_time)
+        #start_time = time.time()
     del sim
     df_save.to_csv(output_dir + name_file_res + "_res.gz")
     #with open(output_dir + name_file_res + "_states.pkl", mode="wb") as f_states:
