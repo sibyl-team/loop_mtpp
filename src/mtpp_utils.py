@@ -6,8 +6,73 @@ class dummy_logger():
     def info(self, s):
         return True
 
+def contacts_cg(mob, t_res, t_unit, first_filter = False):
+    # allow asymmetric contacts + use duration field as time of contact
 
-def contacts_cg(mob, t_res, t_unit, first_filter = True):
+    contacts_raw = []
+    for i in range(mob.num_people):
+        contacts_raw +=list(mob.find_contacts_of_indiv(i,tmin = 0,tmax = np.inf).find((0,np.inf)))
+
+    dt_dict = {}
+    print("All raw contacts", len(contacts_raw))
+
+    for h in contacts_raw:
+        day_start = int(h.t_from // t_unit)
+        day_end = int(h.t_to // t_unit)
+        idxi = h.indiv_i
+        idxj = h.indiv_j
+        if day_start == day_end:
+            if (idxi, idxj, day_start) in dt_dict:
+                dt_dict[(idxi, idxj, day_start)] += h.duration
+            else:
+                dt_dict[(idxi, idxj, day_start)] = h.duration
+        else:
+            if (idxi, idxj, day_start) in dt_dict:
+                dt_dict[(idxi, idxj, day_start)] += (day_start+1)*t_unit - h.t_from
+            else:
+                dt_dict[(idxi, idxj, day_start)] = (day_start+1)*t_unit - h.t_from
+            if (idxi, idxj, day_end) in dt_dict:
+                dt_dict[(idxi, idxj, day_end)] += h.t_to - day_end*t_unit
+            else:
+                dt_dict[(idxi, idxj, day_end)] = h.t_to - day_end*t_unit
+            if day_end - day_start > 1:
+                for t in np.arange(day_start+1,day_end,1):
+                    if (idxi, idxj, t) in dt_dict:
+                        dt_dict[(idxi, idxj, t)] += t_unit
+                    else:
+                        dt_dict[(idxi, idxj, t)] = t_unit
+
+    del contacts_raw
+
+    # filter + count asymmetric/missing contact
+    cont_sqzd_ls = []
+    count_asym = 0
+    count_miss = 0
+    for (i,j,t) in dt_dict:
+        if first_filter:
+            if dt_dict[(i,j,t)] > t_res: 
+                cont_sqzd_ls.append([i, j, t, dt_dict[(i,j,t)]])
+                if (j,i,t) not in dt_dict:
+                    count_miss += 1
+                    #cont_sqzd_ls.append([j, i, t, dt_dict[(i,j,t)]])
+                else:
+                    if dt_dict[(i,j,t)] != dt_dict[(j,i,t)]:
+                        count_asym += 1
+        else:
+            cont_sqzd_ls.append([i, j, t, dt_dict[(i,j,t)]])
+            if (j,i,t) not in dt_dict:
+                count_miss += 1
+                #cont_sqzd_ls.append([j, i, t, dt_dict[(i,j,t)]])
+            else:
+                if dt_dict[(i,j,t)] != dt_dict[(j,i,t)]:
+                    count_asym += 1
+    print("Coarse-grained contacts ", int(len(cont_sqzd_ls)))
+    print("Missing contacts ", count_miss)
+    print("Asymmetric contacts ", count_asym)
+    del dt_dict
+    return cont_sqzd_ls
+
+def contacts_cg_old(mob, t_res, t_unit, first_filter = True):
     # check asymmetric contacts (same t_from and different t_to OR same t_to and different t_from). Take as t_from the minimum
     # value among repeated contacts and as t_to the maximum value
     contacts_raw = []
@@ -55,7 +120,7 @@ def contacts_cg(mob, t_res, t_unit, first_filter = True):
         else:
             site_cont[a] = [(t_from_unique[link], link[2])]
     
-    # drop all contacts with duration less than t_res independently on the day they occur (if flag True)
+    # drop all contacts with duration less than t_res independently of the day they occur (if flag True)
     cont=[]
     for link in site_cont:
         all_times = site_cont[link]
