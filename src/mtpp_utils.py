@@ -11,7 +11,7 @@ def contacts_cg(mob, t_res, t_unit, first_filter = False):
 
     contacts_raw = []
     for i in range(mob.num_people):
-        contacts_raw +=list(mob.find_contacts_of_indiv(i,tmin = 0,tmax = np.inf).find((0,np.inf)))
+        contacts_raw +=list(mob.find_contacts_of_indiv(i,tmin = 0,tmax = np.inf, tracing=True).find((0,np.inf)))
 
     dt_dict = {}
     print("All raw contacts", len(contacts_raw))
