@@ -113,6 +113,7 @@ def loop_mtpp(mob,
 
     ### initialize a separate random stream
     rng = np.random.RandomState()
+    random.seed(seed)
     rng.seed(seed)
     np.random.seed(seed)
     #quarantine_HH = True # at the moment, this is the only possible option. solved ?         
