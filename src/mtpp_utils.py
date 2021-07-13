@@ -6,16 +6,19 @@ class dummy_logger():
     def info(self, s):
         return True
 
-def contacts_cg(mob, t_res, t_unit, first_filter = False):
+def contacts_cg(mob, t_res, t_unit, t_min, t_max, first_filter = False):
     # allow asymmetric contacts + use duration field as time of contact
 
     contacts_raw = []
     for i in range(mob.num_people):
-        contacts_raw +=list(mob.find_contacts_of_indiv(i,tmin = 0,tmax = np.inf, tracing=True).find((0,np.inf)))
+        contacts_raw +=list(mob.find_contacts_of_indiv(i,tmin = t_min,tmax = t_max, tracing=True).find((t_min,t_max)))
 
     dt_dict = {}
     print("All raw contacts", len(contacts_raw))
 
+    cont_midnight = 0
+    cont_more_days = 0
+    cont_collect = 0
     for h in contacts_raw:
         day_start = int(h.t_from // t_unit)
         day_end = int(h.t_to // t_unit)
@@ -23,27 +26,37 @@ def contacts_cg(mob, t_res, t_unit, first_filter = False):
         idxj = h.indiv_j
         if day_start == day_end:
             if (idxi, idxj, day_start) in dt_dict:
+                cont_collect += 1
                 dt_dict[(idxi, idxj, day_start)] += h.duration
             else:
                 dt_dict[(idxi, idxj, day_start)] = h.duration
         else:
+            #if t_max - t_min == t_unit:
+            #    print(h.t_from, h.t_to, day_start, day_end)
+            cont_midnight += 1
             if (idxi, idxj, day_start) in dt_dict:
+                cont_collect += 1
                 dt_dict[(idxi, idxj, day_start)] += (day_start+1)*t_unit - h.t_from
             else:
                 dt_dict[(idxi, idxj, day_start)] = (day_start+1)*t_unit - h.t_from
             if (idxi, idxj, day_end) in dt_dict:
+                cont_collect += 1
                 dt_dict[(idxi, idxj, day_end)] += h.t_to - day_end*t_unit
             else:
                 dt_dict[(idxi, idxj, day_end)] = h.t_to - day_end*t_unit
             if day_end - day_start > 1:
+                cont_more_days += 1
                 for t in np.arange(day_start+1,day_end,1):
                     if (idxi, idxj, t) in dt_dict:
+                        cont_collect += 1
                         dt_dict[(idxi, idxj, t)] += t_unit
                     else:
                         dt_dict[(idxi, idxj, t)] = t_unit
 
     del contacts_raw
-
+    print("Contacts at midnight ", cont_midnight)
+    print("Contacts collected by coarse-graining ", cont_collect)
+    print("Contacts in multiple days ", cont_more_days)
     # filter + count asymmetric/missing contact
     cont_sqzd_ls = []
     count_asym = 0

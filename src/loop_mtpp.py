@@ -64,7 +64,6 @@ def status_to_state_(current_status, hosp_as_rec = False):
 status_to_state = np.vectorize(status_to_state_)
 
 def loop_mtpp(mob,
-             contacts_df,
              inference_algo,
              T = 30, #days of simulation
              beta = 0.55,
@@ -128,9 +127,9 @@ def loop_mtpp(mob,
     housedict = mob.households
     has_app = (rng.random(N) <= adoption_fraction)
     
-    
-    contacts_df = contacts_df.append(get_households_contacts(housedict,T,hh_deltat = contact_duration_households))
-    contacts_df['lambda'] = 1-np.exp(-beta*contacts_df['deltat'].to_numpy()/t_unit)
+    house_ct =  get_households_contacts(housedict,T,hh_deltat = contact_duration_households)
+    #contacts_df = contacts_df.append(house_ct)
+    #contacts_df['lambda'] = 1-np.exp(-beta*contacts_df['deltat'].to_numpy()/t_unit)
     
     ### init data and data_states
     data_states = {}
@@ -231,11 +230,20 @@ def loop_mtpp(mob,
             daily_obs = []
             num_test_algo_today = 0            
 
-
+        ### alternative way of extracting contacts
+        
         ### extract contacts
+        contacts_df = pd.DataFrame(contacts_cg(mob, t_res, t_unit, th, th + delta_th, first_filter = False),columns = ['i','j','t','deltat'])
+        contacts_df.append(house_ct[(house_ct['t'] == t)])
+        print("Taking contacts in the interval ", [th, th+delta_th])
+        contacts_df['lambda'] = 1-np.exp(-beta*contacts_df['deltat'].to_numpy()/t_unit)
         daily_contacts = contacts_df[['i','j','t','lambda']][(contacts_df['t'] == t) 
                                                                 & (contacts_df["i"].isin(all_quarantined) == False) 
                                                                 & (contacts_df["j"].isin(all_quarantined) == False)].to_records(index = False)
+        # debugging
+        #pd_ct = pd.DataFrame(daily_contacts)
+        #pd_ct = pd_ct.sort_values(by=["t","i","j"])
+        #pd_ct.to_csv(output_dir + "daily_cont_" + str(t) + ".csv")
         #print("Daily contacts ", time.time() - start_time)
         #start_time = time.time()
         logger.info(f"number of unique contacts: {len(daily_contacts)}")
