@@ -5,11 +5,11 @@ import json
 import random
 import pandas as pd
 import numpy as np
-import networkx as nx
+#import networkx as nx
 import copy
 import scipy as sp
 import math
-import seaborn
+#import seaborn
 import pickle
 import warnings
 import os
@@ -111,17 +111,15 @@ def loop_mtpp(mob,
         fold_out.mkdir(parents=True)
 
     ### initialize a separate random stream
-    rng = np.random.RandomState()
-    random.seed(seed)
-    rng.seed(seed)
-    np.random.seed(seed)
+    rng = np.random.RandomState(seed)
+
     #quarantine_HH = True # at the moment, this is the only possible option. solved ?         
     
     N = mob.num_people
     
     distributions = CovidDistributions(country=country)
     intensity_params = {'betas' : {'education': beta,'social': beta,'bus_stop': beta,'office': beta,'supermarket': beta}, 'beta_household' : beta }
-    initial_seeds=get_seeds(N, initial_counts)
+    initial_seeds = get_seeds(N, initial_counts)
     print("Starting with guys: ",initial_seeds)
     house = mob.people_household
     housedict = mob.households
@@ -138,7 +136,7 @@ def loop_mtpp(mob,
     data_states["tested_algo"] = []
     data_states["tested_random"] = []
     data_states["tested_sym"] = []
-    for col_name in ["num_quarantined", "q_sym", "q_algo", "q_random", "q_all", "infected_free", "S", "I", "R", "IR", "aurI", "prec1%", "prec5%"]:
+    for col_name in ["num_quarantined", "H", "q_sym", "q_algo", "q_random", "q_all", "infected_free", "S", "I", "R", "IR", "aurI", "prec1%", "prec5%"]:
         data[col_name] = np.full(T,np.nan)
     data["logger"] = logger
 
@@ -266,6 +264,9 @@ def loop_mtpp(mob,
         sym = indices[status == status_legend['isym']]
         sym = test_and_quarantine(rng.permutation(sym), int(len(sym) * fraction_sym_obs))
 
+        ### count hosp individuals
+        nhosp = np.count_nonzero(status == status_legend['hosp'])
+
         ### do num_test_random extra random tests
         test_random = test_and_quarantine(rng.permutation(N), num_test_random)
 
@@ -310,6 +311,7 @@ def loop_mtpp(mob,
         data["q_algo"][t] = inf_test_algo
         data["q_random"][t] = sum(state[test_random]==1)
         data["infected_free"][t] = nfree
+        data["H"][t] = nhosp
         asbirds = 'a bird' if nfree == 1 else 'birds'
 
         ### show output
@@ -376,7 +378,7 @@ def free_mtpp(mob,
     if not fold_out.exists():
         fold_out.mkdir(parents=True)
 
-    np.random.seed(seed)
+    #np.random.seed(seed)
     
     N = mob.num_people
     

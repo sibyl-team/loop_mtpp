@@ -171,6 +171,12 @@ class MeanFieldRanker(AbstractRanker):
         scores = ranking_backtrack(
             t_day, self.transmissions, self.observations,
             self.delta, self.tau, self.mu,self.rng
+	# re-set rng
+	# re-set rng
+	#np.random.seed(seed)
+	#random.seed(seed)
+	#np.random.seed(seed)
+	#random.seed(seed)
         )
         self.mfIs[t_day] = sum(scores)
         data["<I>"] = self.mfIs        
