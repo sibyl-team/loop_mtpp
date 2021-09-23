@@ -89,7 +89,8 @@ def loop_mtpp(mob,
              fp_rate = 0.0,
              fn_rate = 0.0,
              callback = lambda x : None,
-             data = {}
+             data = {},
+             probability_th = 0.0
             ):
     '''
     Simulate interventions strategy on the MTPP epidemic simulation.
@@ -121,6 +122,7 @@ def loop_mtpp(mob,
     intensity_params = {'betas' : {'education': beta,'social': beta,'bus_stop': beta,'office': beta,'supermarket': beta}, 'beta_household' : beta }
     initial_seeds = get_seeds(N, initial_counts)
     print("Starting with guys: ",initial_seeds)
+
     house = mob.people_household
     housedict = mob.households
     has_app = (rng.random(N) <= adoption_fraction)
@@ -136,13 +138,12 @@ def loop_mtpp(mob,
     data_states["tested_algo"] = []
     data_states["tested_random"] = []
     data_states["tested_sym"] = []
-    for col_name in ["num_quarantined", "H", "q_sym", "q_algo", "q_random", "q_all", "infected_free", "S", "I", "R", "IR", "aurI", "prec1%", "prec5%"]:
+    for col_name in ["num_quarantined", "H", "n_test_algo", "q_sym", "q_algo", "q_random", "q_all", "infected_free", "S", "I", "R", "IR", "aurI", "prec1%", "prec5%"]:
         data[col_name] = np.full(T,np.nan)
     data["logger"] = logger
 
     ### init inference algo
     inference_algo.init(N, T)
-    
     ### running variables
     indices = np.arange(N, dtype=int)
     excluded = np.zeros(N, dtype=bool)
@@ -214,7 +215,7 @@ def loop_mtpp(mob,
                     to_quarantine += q
                     excluded[q] = True
                     if test_HH:
-                        tests += q
+                        test_rank += q
                     all_test += q
                 else:
                     excluded_now[i] = True
@@ -239,7 +240,7 @@ def loop_mtpp(mob,
                                                                 & (contacts_df["i"].isin(all_quarantined) == False) 
                                                                 & (contacts_df["j"].isin(all_quarantined) == False)].to_records(index = False)
         # debugging
-        #pd_ct = pd.DataFrame(daily_contacts)
+        #pd_ct = pd.DataFrame(pautoinf = 1e-10daily_contacts)
         #pd_ct = pd_ct.sort_values(by=["t","i","j"])
         #pd_ct.to_csv(output_dir + "daily_cont_" + str(t) + ".csv")
         #print("Daily contacts ", time.time() - start_time)
@@ -251,9 +252,14 @@ def loop_mtpp(mob,
         #start_time = time.time()
         rank_algo = inference_algo.rank(t, weighted_contacts, daily_obs, data)
         rank = np.array(sorted(rank_algo, key= lambda tup: tup[1], reverse=True))
-        rank = [int(tup[0]) for tup in rank]
+        if probability_th > 0:
+            rank = [int(tup[0]) for tup in rank if tup[1] > probability_th]
+            num_test_algo_today = len(rank)
+        else:
+            rank = [int(tup[0]) for tup in rank]
         ### test num_test_algo_today individuals
         test_algo = test_and_quarantine(rank, num_test_algo_today)
+        logger.info(f"number of tests today: {len(test_algo)}")
         #print("Quarantine ", time.time() - start_time)
         #start_time = time.time()
         ### compute roc now, only excluding past tests
@@ -302,6 +308,7 @@ def loop_mtpp(mob,
         data["aurI"][t] = aurI
         data["prec1%"][t] = prec(1)
         data["prec5%"][t] = prec(5)
+        data["n_test_algo"][t] = len(test_algo)
         data["num_quarantined"][t] = num_quarantined
         data["q_sym"][t] = len(sym)
         inf_test_algo = sum(state[test_algo]==1)
@@ -342,22 +349,22 @@ def loop_mtpp(mob,
 
 
 def free_mtpp(mob,
-              T = 30, #days of simulation
-             beta = 0.55,
+            T = 30, #days of simulation
+            beta = 0.55,
             country = 'GBR',
             initial_counts = {'expo': 5, 'isym': 5 , 'iasy': 5}, #in the form {'expo': 7, 'isym_posi': 2, 'iasy': 2},
-             logger = dummy_logger(),
-             seed=1,
-              t_unit = 24,
-              delta_days = 1, # quarantine every tot days
-              t_res = 0.25, #in hours,
-              contact_duration_households = 3, # hours
-             name_file_res = "res",
-             output_dir = "./output_mtpp/",
-             save_every_iter = 1,
-             stop_zero_I = True,
-             callback = lambda x : None,
-             data = {}
+            logger = dummy_logger(),
+            seed=1,
+            t_unit = 24,
+            delta_days = 1, # quarantine every tot days
+            t_res = 0.25, #in hours,
+            contact_duration_households = 3, # hours
+            name_file_res = "res",
+            output_dir = "./output_mtpp/",
+            save_every_iter = 1,
+            stop_zero_I = True,
+            callback = lambda x : None,
+            data = {}
             ):
     '''
     Simulate interventions strategy on the MTPP epidemic simulation.
