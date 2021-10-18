@@ -90,7 +90,8 @@ def loop_mtpp(mob,
              fn_rate = 0.0,
              callback = lambda x : None,
              data = {},
-             probability_th = 0.0
+             probability_th = 0.0,
+             adapt_th = False
             ):
     '''
     Simulate interventions strategy on the MTPP epidemic simulation.
@@ -105,6 +106,10 @@ def loop_mtpp(mob,
     results:
         print on file true configurations and transmission
     '''
+
+    if adapt_th and probability_th > 0.0:
+        print("Cannot concurrently use fixed and adaptive probability. using fixed threashold")
+        adapt_th = False
     
     ### create output_dir if missing
     fold_out = Path(output_dir)
@@ -138,8 +143,11 @@ def loop_mtpp(mob,
     data_states["tested_algo"] = []
     data_states["tested_random"] = []
     data_states["tested_sym"] = []
-    for col_name in ["num_quarantined", "H", "n_test_algo", "q_sym", "q_algo", "q_random", "q_all", "infected_free", "S", "I", "R", "IR", "aurI", "prec1%", "prec5%"]:
+    for col_name in ["num_quarantined", "H", "n_test_algo", "q_sym",
+                     "q_algo", "q_random", "q_all", "infected_free", "S", 
+                     "I", "R", "IR", "aurI", "prec1%", "prec5%"]:
         data[col_name] = np.full(T,np.nan)
+    data["vecH"]= [[] for t in range(0,T)]
     data["logger"] = logger
 
     ### init inference algo
@@ -147,12 +155,14 @@ def loop_mtpp(mob,
     ### running variables
     indices = np.arange(N, dtype=int)
     excluded = np.zeros(N, dtype=bool)
+    vecH = np.zeros(6, dtype=int)
     daily_obs = []
     all_obs = []
     all_quarantined = []
+    rank = []
+    rank_algo = []
     freebirds = 0
     num_quarantined = 0
-
     status_dict = initial_seeds
     delta_th = delta_days * t_unit # quarantine every tot days
 
@@ -163,6 +173,9 @@ def loop_mtpp(mob,
     t = 0
     sim.t0 = 0
     start_time = time.time()
+
+    estimate_inf_yest = 0
+    estimate_inf_today = 0
     for t in range(T):
         th = t*t_unit
         ### advance one time step
@@ -225,16 +238,13 @@ def loop_mtpp(mob,
         
         ### compute rank from algorithm
         num_test_algo_today = num_test_algo
-        if t < initial_steps:
-            daily_obs = []
-            num_test_algo_today = 0            
 
         ### alternative way of extracting contacts
         
         ### extract contacts
         contacts_df = pd.DataFrame(contacts_cg(mob, t_res, t_unit, th, th + delta_th, first_filter = False),columns = ['i','j','t','deltat'])
         contacts_df.append(house_ct[(house_ct['t'] == t)])
-        print("Taking contacts in the interval ", [th, th+delta_th])
+        logger.info(f"adding contacts in the interval [{th}, {th+delta_th}]")
         contacts_df['lambda'] = 1-np.exp(-beta*contacts_df['deltat'].to_numpy()/t_unit)
         daily_contacts = contacts_df[['i','j','t','lambda']][(contacts_df['t'] == t) 
                                                                 & (contacts_df["i"].isin(all_quarantined) == False) 
@@ -252,13 +262,26 @@ def loop_mtpp(mob,
         #start_time = time.time()
         rank_algo = inference_algo.rank(t, weighted_contacts, daily_obs, data)
         rank = np.array(sorted(rank_algo, key= lambda tup: tup[1], reverse=True))
-        if probability_th > 0:
+        if probability_th > 0.0:
             rank = [int(tup[0]) for tup in rank if tup[1] > probability_th]
             num_test_algo_today = len(rank)
+        elif adapt_th:
+            estimate_inf_yest = estimate_inf_today
+            estimate_inf_today = data["<I>"][t]
+            if t > 0:
+                frac_new = (estimate_inf_today-estimate_inf_yest) / estimate_inf_yest 
+            else:
+                frac_new = 0.0
+            num_test_algo_today = max(0, frac_new * estimate_inf_today)
+            rank = [int(tup[0]) for tup in rank]
         else:
             rank = [int(tup[0]) for tup in rank]
+        
+        if t < initial_steps:
+            daily_obs = []
+            num_test_algo_today = 0            
         ### test num_test_algo_today individuals
-        test_algo = test_and_quarantine(rank, num_test_algo_today)
+        test_algo = test_and_quarantine(rank, int(num_test_algo_today))
         logger.info(f"number of tests today: {len(test_algo)}")
         #print("Quarantine ", time.time() - start_time)
         #start_time = time.time()
@@ -272,6 +295,7 @@ def loop_mtpp(mob,
 
         ### count hosp individuals
         nhosp = np.count_nonzero(status == status_legend['hosp'])
+        hosp_age = np.multiply((status == status_legend['hosp']) , (mob.people_age + 1) )
 
         ### do num_test_random extra random tests
         test_random = test_and_quarantine(rng.permutation(N), num_test_random)
@@ -319,6 +343,8 @@ def loop_mtpp(mob,
         data["q_random"][t] = sum(state[test_random]==1)
         data["infected_free"][t] = nfree
         data["H"][t] = nhosp
+        vecH = [np.count_nonzero(hosp_age == i) for i in range(1,len(vecH)+1)]
+        data["vecH"][t] = vecH
         asbirds = 'a bird' if nfree == 1 else 'birds'
 
         ### show output
