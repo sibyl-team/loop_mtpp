@@ -149,6 +149,7 @@ def loop_mtpp(mob,
         data[col_name] = np.full(T,np.nan)
     data["vecH"]= [[] for t in range(0,T)]
     data["logger"] = logger
+    data["tested_algo"] = [[] for t in range(0,T)]
 
     ### init inference algo
     inference_algo.init(N, T)
@@ -156,6 +157,7 @@ def loop_mtpp(mob,
     indices = np.arange(N, dtype=int)
     excluded = np.zeros(N, dtype=bool)
     vecH = np.zeros(6, dtype=int)
+    talgo = np.zeros(N, dtype=bool)
     daily_obs = []
     all_obs = []
     all_quarantined = []
@@ -345,6 +347,11 @@ def loop_mtpp(mob,
         data["H"][t] = nhosp
         vecH = [np.count_nonzero(hosp_age == i) for i in range(1,len(vecH)+1)]
         data["vecH"][t] = vecH
+        for idx in test_algo:
+            talgo[idx] = 1
+        data["tested_algo"][t] = talgo
+        for i in range(0,N):
+            talgo[i] = 0
         asbirds = 'a bird' if nfree == 1 else 'birds'
 
         ### show output
