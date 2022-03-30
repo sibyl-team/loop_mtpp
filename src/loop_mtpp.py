@@ -44,10 +44,10 @@ def get_status(sim_state,t,N):
         s_vec[s_dict[k]] = status_legend[k]
     return s_dict,s_vec
 
-def get_seeds(num,initial_counts):
+def get_seeds(rng, num, initial_counts):
     # init state variables with seeds
     total_seeds = sum(v for v in initial_counts.values())
-    initial_people = np.random.choice(num, size=total_seeds, replace=False)
+    initial_people = rng.choice(num, size=total_seeds, replace=False)
 
     ptr = 0
     initial_seeds = dict()
@@ -117,15 +117,15 @@ def loop_mtpp(mob,
         fold_out.mkdir(parents=True)
 
     ### initialize a separate random stream
-    rng = np.random.RandomState(seed)
 
+    rng = np.random.RandomState(seed)
     #quarantine_HH = True # at the moment, this is the only possible option. solved ?         
     
     N = mob.num_people
     
     distributions = CovidDistributions(country=country)
     intensity_params = {'betas' : {'education': beta,'social': beta,'bus_stop': beta,'office': beta,'supermarket': beta}, 'beta_household' : beta }
-    initial_seeds = get_seeds(N, initial_counts)
+    initial_seeds = get_seeds(rng, N, initial_counts)
     print("Starting with guys: ",initial_seeds)
 
     house = mob.people_household
@@ -424,13 +424,13 @@ def free_mtpp(mob,
     if not fold_out.exists():
         fold_out.mkdir(parents=True)
 
-    #np.random.seed(seed)
     
+    rng = np.random.RandomState(seed)
     N = mob.num_people
     
     distributions = CovidDistributions(country=country)
     intensity_params = {'betas' : {'education': beta,'social': beta,'bus_stop': beta,'office': beta,'supermarket': beta}, 'beta_household' : beta }
-    initial_seeds=get_seeds(N, initial_counts)
+    initial_seeds=get_seeds(rng, N, initial_counts)
     
     for col_name in ["I", "IR","infected_free","num_quarantined"]:
         data[col_name] = np.full(T,np.nan)
