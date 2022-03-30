@@ -1,4 +1,5 @@
 import sys
+import os
 
 sys.path.insert(0,'src/')
 sys.path.insert(0, '../sib/')
@@ -88,7 +89,9 @@ import sib,  scipy
 from rankers import dotd_rank, greedy_rank, mean_field_rank, sib_rank
 from tqdm.notebook import tqdm
 from scipy.stats import gamma
-sib.set_num_threads(1)
+os.environ['NUMEXPR_MAX_THREADS'] = '32'
+os.environ['NUMEXPR_NUM_THREADS'] = '32'
+sib.set_num_threads(32)
 
 #import matplotlib.pyplot as plt
 

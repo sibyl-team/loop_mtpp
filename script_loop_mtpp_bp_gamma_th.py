@@ -1,5 +1,5 @@
 import sys
-
+import os
 sys.path.insert(0,'src/')
 sys.path.insert(0, '../sib/')
 sys.path.insert(0, '../simulator/sim/lib/') # we need distributions.py
@@ -90,7 +90,10 @@ import sib, scipy
 from rankers import dotd_rank, greedy_rank, mean_field_rank, sib_rank
 from tqdm.notebook import tqdm
 from scipy.stats import gamma
-sib.set_num_threads(1)
+
+os.environ['NUMEXPR_MAX_THREADS'] = '64'
+os.environ['NUMEXPR_NUM_THREADS'] = '64'
+sib.set_num_threads(64)
 
 #import matplotlib.pyplot as plt
 
@@ -99,10 +102,10 @@ prob_seed = 1/N
 prob_sus = 0.5
 pseed = prob_seed / (2 - prob_seed)
 psus = prob_sus * (1 - pseed)
-if adoption_fraction < 1.0:
-    pautoinf = 1e-4
-else:
-    pautoinf = 1e-6
+#if adoption_fraction < 1.0:
+#    pautoinf = 1e-4
+#else:
+pautoinf = 1e-6
 fp_rate = 0.0
 fn_rate = fnr
 
