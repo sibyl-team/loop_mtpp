@@ -140,6 +140,7 @@ def loop_mtpp(mob,
     data_states = {}
     data_states["true_conf"] = np.zeros((T,N))
     data_states["statuses"] = np.zeros((T,N))
+    data_states["transmissions"] = []
     data_states["tested_algo"] = []
     data_states["tested_random"] = []
     data_states["tested_sym"] = []
@@ -331,6 +332,7 @@ def loop_mtpp(mob,
         excluded[rec] = True
 
         ### update data 
+        data_states["transmissions"].append(sim.transm)
         data_states["tested_algo"].append(test_algo)
         data_states["tested_random"].append(test_random)
         data_states["tested_sym"].append(sym)
