@@ -8,16 +8,14 @@ adp_frac=$3
 tau=$4
 #prob_th=0.001
 
-for alg in mf greedy
+
+for seed in $(seq 1 1 4)
 do
-	for seed in $(seq 1 1 11)
-	#for seed in 2
+    for alg in greedy bp_gamma
 	do			
-		#for nobs in 60 90 120 150
 		for nobs in 400
 		do
 			script=$(echo "script_loop_mtpp_"$alg".py")
-			#start_time=$(date +%s)
 			flag=$seed"_"$alg"_"$nobs"_"$ti"_fnr_"$fn_rate"_af_"$adp_frac"_tau_"$tau
 			echo $flag
 			python3  $script "--fn_rate" $fn_rate "--tau" $tau "-m" $seed  "-n" $nobs "-b" $beta "-i" $ti "--adp_frac" $adp_frac 

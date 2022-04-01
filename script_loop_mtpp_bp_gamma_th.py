@@ -91,9 +91,9 @@ from rankers import dotd_rank, greedy_rank, mean_field_rank, sib_rank
 from tqdm.notebook import tqdm
 from scipy.stats import gamma
 
-os.environ['NUMEXPR_MAX_THREADS'] = '64'
-os.environ['NUMEXPR_NUM_THREADS'] = '64'
-sib.set_num_threads(64)
+os.environ['NUMEXPR_MAX_THREADS'] = '8'
+os.environ['NUMEXPR_NUM_THREADS'] = '8'
+sib.set_num_threads(8)
 
 #import matplotlib.pyplot as plt
 
@@ -135,7 +135,9 @@ rankers["BP_gamma"] = sib_rank.SibRanker(
                  tol = 1e-3,
                  memory_decay = 1e-5,
                  window_length = 21,
-                 tau=tau
+                 tau=tau,
+                 fnr=fn_rate,
+                 fpr=fp_rate
 )
 
 ress = {}

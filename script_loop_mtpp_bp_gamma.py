@@ -89,9 +89,9 @@ import sib,  scipy
 from rankers import dotd_rank, greedy_rank, mean_field_rank, sib_rank
 from tqdm.notebook import tqdm
 from scipy.stats import gamma
-os.environ['NUMEXPR_MAX_THREADS'] = '32'
-os.environ['NUMEXPR_NUM_THREADS'] = '32'
-sib.set_num_threads(32)
+os.environ['NUMEXPR_MAX_THREADS'] = '8'
+os.environ['NUMEXPR_NUM_THREADS'] = '8'
+sib.set_num_threads(8)
 
 #import matplotlib.pyplot as plt
 
@@ -100,10 +100,10 @@ prob_seed = 1/N
 prob_sus = 0.5
 pseed = prob_seed / (2 - prob_seed)
 psus = prob_sus * (1 - pseed)
-if adoption_fraction < 1.0:
-    pautoinf = 1e-4
-else:
-    pautoinf = 1e-6
+#if adoption_fraction < 1.0:
+#    pautoinf = 1e-4
+#else:
+pautoinf = 1e-6
 #pautoinf = 1e-6
 fp_rate = 0.0
 fn_rate = fnr
@@ -133,7 +133,9 @@ rankers["BP_gamma"] = sib_rank.SibRanker(
                  tol = 1e-3,
                  memory_decay = 1e-5,
                  window_length = 21,
-                 tau=tau
+                 tau=tau,
+                 fnr=fn_rate,
+                 fpr=fp_rate,
 )
 
 ress = {}
