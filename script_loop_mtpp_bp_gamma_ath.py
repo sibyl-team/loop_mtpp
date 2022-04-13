@@ -120,16 +120,10 @@ tau = args.tau
 
 rankers["BP_gamma"] = sib_rank.SibRanker(
                  params = sib.Params(
-                                 #prob_i = sib.Uniform(1.0), 
-                                 #prob_r = sib.Exponential(1/30), 
-                                 #prob_i = sib.PriorDiscrete(list(scipy.special.expit(alpha*(range(T+1) -t0*np.ones(T+1))))), 
-                                 #prob_r = sib.PriorDiscrete(list(scipy.stats.gamma.sf(range(T+1), k_rec_gamma, scale=scale_rec_gamma))),
                                  prob_i = sib.PiecewiseLinear(sib.RealParams(list(scipy.special.expit(alpha*(range(T+1) -t0*np.ones(T+1)))))), 
                                  prob_r = sib.PiecewiseLinear(sib.RealParams(list(scipy.stats.gamma.sf(range(T+1), k_rec_gamma, scale=scale_rec_gamma)))),
                                  pseed = pseed,
                                  psus = psus,
-                                 fp_rate = fp_rate,
-                                 fn_rate = fn_rate,
                                  pautoinf = pautoinf),
                  maxit0 = 20,
                  maxit1 = 20,

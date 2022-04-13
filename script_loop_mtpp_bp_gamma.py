@@ -89,9 +89,9 @@ import sib,  scipy
 from rankers import dotd_rank, greedy_rank, mean_field_rank, sib_rank
 from tqdm.notebook import tqdm
 from scipy.stats import gamma
-os.environ['NUMEXPR_MAX_THREADS'] = '8'
-os.environ['NUMEXPR_NUM_THREADS'] = '8'
-sib.set_num_threads(8)
+os.environ['NUMEXPR_MAX_THREADS'] = '64'
+os.environ['NUMEXPR_NUM_THREADS'] = '64'
+sib.set_num_threads(64)
 
 #import matplotlib.pyplot as plt
 
@@ -106,7 +106,7 @@ psus = prob_sus * (1 - pseed)
 pautoinf = 1e-6
 #pautoinf = 1e-6
 fp_rate = 0.0
-fn_rate = fnr
+fn_rate = max(fnr, 1e-6)
 
 rankers = {}
 
@@ -117,16 +117,10 @@ alpha = 2.0
 tau =  args.tau
 rankers["BP_gamma"] = sib_rank.SibRanker(
                  params = sib.Params(
-                                 #prob_i = sib.Uniform(1.0), 
-                                 #prob_r = sib.Exponential(1/30), 
-                                 #prob_i = sib.PriorDiscrete(list(scipy.special.expit(alpha*(range(T+1) -t0*np.ones(T+1))))), 
-                                 #prob_r = sib.PriorDiscrete(list(scipy.stats.gamma.sf(range(T+1), k_rec_gamma, scale=scale_rec_gamma))),
                                  prob_i = sib.PiecewiseLinear(sib.RealParams(list(scipy.special.expit(alpha*(range(T+1) -t0*np.ones(T+1)))))), 
                                  prob_r = sib.PiecewiseLinear(sib.RealParams(list(scipy.stats.gamma.sf(range(T+1), k_rec_gamma, scale=scale_rec_gamma)))),
                                  pseed = pseed,
                                  psus = psus,
-                                 fp_rate = fp_rate,
-                                 fn_rate = fn_rate,
                                  pautoinf = pautoinf),
                  maxit0 = 20,
                  maxit1 = 20,

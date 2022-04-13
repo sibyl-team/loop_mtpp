@@ -9,9 +9,9 @@ tau=$4
 #prob_th=0.001
 
 
-for seed in $(seq 1 1 4)
+for seed in $(seq 1 1 9)
 do
-    for alg in greedy bp_gamma
+    for alg in bp_gamma
 	do			
 		for nobs in 400
 		do

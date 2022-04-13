@@ -127,8 +127,6 @@ rankers["BP_gamma"] = sib_rank.SibRanker(
                                  prob_r = sib.PiecewiseLinear(sib.RealParams(list(scipy.stats.gamma.sf(range(T+1), k_rec_gamma, scale=scale_rec_gamma)))),
                                  pseed = pseed,
                                  psus = psus,
-                                 fp_rate = fp_rate,
-                                 fn_rate = fn_rate,
                                  pautoinf = pautoinf),
                  maxit0 = 20,
                  maxit1 = 20,
