@@ -14,6 +14,10 @@ import pickle
 import warnings
 import os
 from os.path import join
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import precision_recall_curve
+
 
 from lib.distributions import CovidDistributions
 #from lib.slim_dynamics import get_seeds, run, is_state_at
@@ -72,7 +76,7 @@ def loop_mtpp(mob,
              logger = dummy_logger(),
              seed=1,
              initial_steps = 0,
-             num_test_random = 50,
+             num_test_random = 0,
              num_test_algo = 50,
              fraction_sym_obs = 0.4,
              t_unit = 24,
@@ -232,7 +236,10 @@ def loop_mtpp(mob,
                     excluded[q] = True
                     if test_HH:
                         test_rank += q
-                    all_test += q
+                        all_test += q
+                    else:
+                        test_rank += [i]
+                        all_test += [i]
                 else:
                     excluded_now[i] = True
                     all_test += [i]
@@ -294,21 +301,25 @@ def loop_mtpp(mob,
             rank = [int(tup[0]) for tup in rank]
         
         if t < initial_steps:
-            daily_obs = []
             num_test_algo_today = 0            
         ### test num_test_algo_today individuals
         test_algo = test_and_quarantine(rank, int(num_test_algo_today))
+        print(test_algo)
         logger.info(f"number of tests today: {len(test_algo)}")
         #print("Quarantine ", time.time() - start_time)
         #start_time = time.time()
         ### compute roc now, only excluding past tests
         eventsI = events_list(t, [(i,1,t) for (i,tf) in enumerate(excluded) if tf], data_states["true_conf"], check_fn = check_fn_I)
         xI, yI, aurI, sortlI = roc_curve(dict(rank_algo), eventsI, lambda x: x)
+        ### compute ROC and precision recall curve for all infected (tests can be noisy)
+        allI = (state == 1)
+        probI = [rank_algo[i][1] for i in range(0,N)]
+        print(rank_algo)
         
         ### test a fraction of sym
         sym = indices[status == status_legend['isym']]
         sym = test_and_quarantine(rng.permutation(sym), int(len(sym) * fraction_sym_obs))
-
+        print(sym)
         ### count hosp individuals
         nhosp = np.count_nonzero(status == status_legend['hosp'])
         hosp_age = np.multiply((status == status_legend['hosp']) , (mob.people_age + 1) )
@@ -326,6 +337,7 @@ def loop_mtpp(mob,
                 print("ERROR-> adding observation of a quarantined node")
                 
         daily_obs = [(int(i), int(f_state[i]), int(t)) for i in all_test]
+        print(daily_obs)
         all_obs += daily_obs
 
         ### exclude forever nodes that are observed recovered
