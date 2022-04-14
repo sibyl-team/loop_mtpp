@@ -25,7 +25,7 @@ from lib.slim_dynamics import DiseaseModel
 #from lib.summary import is_state_at
 
 from mtpp_utils import contacts_cg, get_households_contacts
-from analysis_utils import ranker_I, check_fn_I, ranker_IR, check_fn_IR, roc_curve, events_list
+from analysis_utils import ranker_I, check_fn_I, ranker_IR, check_fn_IR, events_list
 #from abm_utils import status_to_state, listofhouses, dummy_logger, quarantine_households
 from mtpp_utils import dummy_logger
 
@@ -145,13 +145,15 @@ def loop_mtpp(mob,
     data_states["true_conf"] = np.zeros((T,N))
     data_states["statuses"] = np.zeros((T,N))
     data_states["ROC"] = []
+    data_states["PPV"] = []
     data_states["transmissions"] = []
     data_states["tested_algo"] = []
     data_states["tested_random"] = []
     data_states["tested_sym"] = []
+    data_states["AUC"] = []
     for col_name in ["num_quarantined", "H", "n_test_algo", "q_sym",
                      "q_algo", "q_random", "q_all", "infected_free", "S", 
-                     "I", "R", "IR", "aurI", "prec1%", "prec5%"]:
+                     "I", "R", "IR", "prec1%", "prec5%"]:
         data[col_name] = np.full(T,np.nan)
     data["vecH"]= [[] for t in range(0,T)]
     data["logger"] = logger
@@ -304,22 +306,29 @@ def loop_mtpp(mob,
             num_test_algo_today = 0            
         ### test num_test_algo_today individuals
         test_algo = test_and_quarantine(rank, int(num_test_algo_today))
-        print(test_algo)
         logger.info(f"number of tests today: {len(test_algo)}")
-        #print("Quarantine ", time.time() - start_time)
-        #start_time = time.time()
+
         ### compute roc now, only excluding past tests
-        eventsI = events_list(t, [(i,1,t) for (i,tf) in enumerate(excluded) if tf], data_states["true_conf"], check_fn = check_fn_I)
-        xI, yI, aurI, sortlI = roc_curve(dict(rank_algo), eventsI, lambda x: x)
+        #eventsI = events_list(t, [(i,1,t) for (i,tf) in enumerate(excluded) if tf], data_states["true_conf"], check_fn = check_fn_I)
+        #xI, yI, aurI, sortlI = roc_curve(dict(rank_algo), eventsI, lambda x: x)
+        #print(aurI)
+        
         ### compute ROC and precision recall curve for all infected (tests can be noisy)
-        allI = (state == 1)
-        probI = [rank_algo[i][1] for i in range(0,N)]
-        print(rank_algo)
+        allI = np.zeros(N)
+        probI = np.zeros(N)
+        for (i, p) in rank_algo:
+            #if state[i] == 1 or state[i] == 2:
+            if state[i] == 1:
+                allI[i] = 1.0
+            probI[i] = p
+        roc_fpr, roc_tpr, _ = roc_curve(allI, probI)
+        roc_auc = roc_auc_score(allI, probI)
+        precision, recall, _ = precision_recall_curve(allI, probI)
         
         ### test a fraction of sym
         sym = indices[status == status_legend['isym']]
         sym = test_and_quarantine(rng.permutation(sym), int(len(sym) * fraction_sym_obs))
-        print(sym)
+
         ### count hosp individuals
         nhosp = np.count_nonzero(status == status_legend['hosp'])
         hosp_age = np.multiply((status == status_legend['hosp']) , (mob.people_age + 1) )
@@ -337,8 +346,8 @@ def loop_mtpp(mob,
                 print("ERROR-> adding observation of a quarantined node")
                 
         daily_obs = [(int(i), int(f_state[i]), int(t)) for i in all_test]
-        print(daily_obs)
         all_obs += daily_obs
+        
 
         ### exclude forever nodes that are observed recovered
         rec = [i[0] for i in daily_obs if f_state[i[0]] == 2]
@@ -350,16 +359,18 @@ def loop_mtpp(mob,
         data_states["tested_random"].append(test_random)
         data_states["tested_sym"].append(sym)
         data_states["statuses"][t] = status
-        data_states["ROC"].append([xI, yI])
+        data_states["ROC"].append([roc_fpr, roc_tpr])
+        data_states["PPV"].append([precision, recall])
+        data_states["AUC"].append(roc_auc)
         data["S"][t] = nS
         data["I"][t] = nI
         data["R"][t] = nR
         data["IR"][t] = nR+nI
-        data["aurI"][t] = aurI
-        prec = lambda f: yI[int(f/100*len(yI))]/int(f/100*len(yI)) if len(yI) else np.nan
+        #data["aurI"][t] = aurI
+        prec = lambda f: roc_tpr[int(f/100*len(roc_tpr))]/int(f/100*len(roc_tpr)) if len(roc_tpr) else np.nan
         ninfq = sum(state[to_quarantine]>0)
         nfree = int(nI - sum(excluded[state == 1]))
-        data["aurI"][t] = aurI
+        #data["aurI"][t] = aurI
         data["prec1%"][t] = prec(1)
         data["prec5%"][t] = prec(5)
         data["n_test_algo"][t] = len(test_algo)
@@ -379,7 +390,7 @@ def loop_mtpp(mob,
 
         ### show output
         logger.info(f"True  : (S,I,R): ({nS:.1f}, {nI:.1f}, {nR:.1f})")
-        logger.info(f"AUR_I : {aurI:.3f}, prec100: {yI[100]}, prec(1% of {len(yI)}): {prec(1):.2f}, prec5%: {prec(5):.2f}")
+        logger.info(f"AUC_I : {roc_auc:.3f}") #, prec100: {roc_tpr[100]}, prec(1% of {len(roc_tpr)}): {prec(1):.2f}, prec5%: {prec(5):.2f}")
         logger.info(f"sym: {len(sym)}, results test algo (S,I,R): ({sus_test_algo},{inf_test_algo},{rec_test_algo}), infected test random: {inf_test_random}/{num_test_random}")
         logger.info(f"...quarantining {len(to_quarantine)} guys -> got {ninfq} infected, {nfree} free as {asbirds} ({nfree-freebirds:+d})")
         freebirds = nfree
