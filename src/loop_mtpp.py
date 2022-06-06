@@ -250,11 +250,10 @@ def loop_mtpp(mob,
                                 all_quarantined += [j]
                                 to_quarantine += [j]
                                 excluded[j] = True
-                    else:
-                        excluded_now[i] = True
-                        all_quarantined += [i]
-                        to_quarantine += [i]
-                        excluded[i] = True
+                    excluded_now[i] = True
+                    all_quarantined += [i]
+                    to_quarantine += [i]
+                    excluded[i] = True
             return test_rank
                  
         ### compute rank from algorithm
