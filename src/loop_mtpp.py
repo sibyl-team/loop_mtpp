@@ -74,7 +74,7 @@ def loop_mtpp(mob,
              country = 'GBR',
              initial_counts = {'expo': 5, 'isym': 5 , 'iasy': 5}, #in the form {'expo': 7, 'isym_posi': 2, 'iasy': 2},
              logger = dummy_logger(),
-             seed=1,
+             seed=100,
              initial_steps = 0,
              num_test_random = 0,
              num_test_algo = 50,
@@ -146,6 +146,7 @@ def loop_mtpp(mob,
     data_states["statuses"] = np.zeros((T,N))
     data_states["ROC"] = []
     data_states["PPV"] = []
+    data_states["traced_inf"] = []
     data_states["transmissions"] = []
     data_states["tested_algo"] = []
     data_states["tested_random"] = []
@@ -182,7 +183,7 @@ def loop_mtpp(mob,
     t = 0
     sim.t0 = 0
     start_time = time.time()
-
+    print("sym obs", fraction_sym_obs)
     estimate_inf_yest = 0
     estimate_inf_today = 0
     for t in range(T):
@@ -224,30 +225,38 @@ def loop_mtpp(mob,
         def test_and_quarantine(rank, num):
             nonlocal to_quarantine, excluded_now, all_test, all_quarantined
             test_rank = []
+            count = 0
             for i in rank:
-                if len(test_rank) == num:
-                    break;
                 if excluded_now[i]:
                     continue
+                if count == num:
+                    break
+                count += 1
                 test_rank += [i]
+                all_test += [i]
                 if f_state[i] == 1:
-                    q = housedict[house[i]] if quarantine_HH else [i]
-                    excluded_now[q] = True
-                    all_quarantined += q
-                    to_quarantine += q
-                    excluded[q] = True
+                    q = housedict[house[i]] 
+                    if quarantine_HH:
+                        excluded_now[q] = True
+                        all_quarantined += q
+                        to_quarantine += q
+                        excluded[q] = True
                     if test_HH:
                         test_rank += q
                         all_test += q
+                        for j in q:
+                            if f_state[j] == 1:
+                                excluded_now[j] = True
+                                all_quarantined += [j]
+                                to_quarantine += [j]
+                                excluded[j] = True
                     else:
-                        test_rank += [i]
-                        all_test += [i]
-                else:
-                    excluded_now[i] = True
-                    all_test += [i]
+                        excluded_now[i] = True
+                        all_quarantined += [i]
+                        to_quarantine += [i]
+                        excluded[i] = True
             return test_rank
-                
-        
+                 
         ### compute rank from algorithm
         num_test_algo_today = num_test_algo
 
@@ -305,6 +314,7 @@ def loop_mtpp(mob,
         if t < initial_steps:
             num_test_algo_today = 0            
         ### test num_test_algo_today individuals
+        
         test_algo = test_and_quarantine(rank, int(num_test_algo_today))
         logger.info(f"number of tests today: {len(test_algo)}")
 
@@ -318,9 +328,9 @@ def loop_mtpp(mob,
         probI = np.zeros(N)
         for (i, p) in rank_algo:
             #if state[i] == 1 or state[i] == 2:
-            if state[i] == 1:
-                allI[i] = 1.0
-            probI[i] = p
+            if state[int(i)] == 1:
+                allI[int(i)] = 1.0
+            probI[int(i)] = p
         roc_fpr, roc_tpr, _ = roc_curve(allI, probI)
         roc_auc = roc_auc_score(allI, probI)
         precision, recall, _ = precision_recall_curve(allI, probI)
@@ -354,6 +364,7 @@ def loop_mtpp(mob,
         excluded[rec] = True
 
         ### update data 
+        data_states["traced_inf"].append(rank[0:num_test_algo])
         data_states["transmissions"].append(sim.transm)
         data_states["tested_algo"].append(test_algo)
         data_states["tested_random"].append(test_random)
