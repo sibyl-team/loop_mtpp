@@ -1,4 +1,5 @@
 import sys
+import os
 
 sys.path.insert(0,'src/')
 sys.path.insert(0, '../sib/')
@@ -21,21 +22,28 @@ import argparse
 import random
 
 parser = argparse.ArgumentParser(description="Run Loop MTPP")
-
+parser.add_argument('-T', type=int, default=100, dest="T", help="max time")
+parser.add_argument('--or', type=int, default=0, dest="num_test_rnd", help='number of observations random')
+parser.add_argument('--frac_sym', type=float, default=0.5, dest="frac_sym", help='fraction of symp observations')
+parser.add_argument('--test_HH', type = int, default = 0, dest="test_HH", help = "test households 1/0")
+parser.add_argument('--quarantine_HH', type = int, default = 1, dest="quar_HH", help = "quarantine households 1/0")
 parser.add_argument('--fn_rate', type=float, default=0.0, dest="fnr", help="false negative rate")
 parser.add_argument('--adp_frac', type=float, default=1.0, dest="af", help="adoption fraction of the app")
 parser.add_argument('-n', type=int, default=500, dest="obs", help="number of obs")
-parser.add_argument('-s', type=int, default=0, dest="seed", help="seed")
+parser.add_argument('-s', type=int, default=1, dest="seed", help="seed")
 parser.add_argument('-m', type=int, default=50, dest="seed_mob", help="seed mob")
 parser.add_argument('-b', type=float, default=0.55, dest="beta", help="infection prob rate")
 parser.add_argument('-i', type=int, default=7, dest="ti", help="waiting time before intervention")
 parser.add_argument('--tau', type=int, default=7, dest="tau", help="tau > 0 use \sum_t in tau b[t]. tau = 0 use prob[x = I]")
+parser.add_argument('--out', type=str, default="output", dest="output", help="output directory")
+
 args = parser.parse_args()
 
 #logging
 data_path = '../simulator/sim/lib/mobility/'
+output_dir = args.output + "/"
 
-output_dir = "output_Tubingen_pop1_site1/"
+#output_dir = "output_Tubingen_pop1_site1_rnd_" + str(args.num_test_rnd) + "/"
 fold_out = Path(output_dir)
 if not fold_out.exists():
     fold_out.mkdir(parents=True)
@@ -51,7 +59,7 @@ with open(data_path + 'Tubingen_settings_pop1_site1.pk', 'rb') as fp:
     mob_kwargs = pickle.load(fp)
 
 mob_kwargs["delta"] = 0.2554120904376099
-T = 100
+T = args.T
 seed_mob = args.seed_mob
 
 random.seed(seed_mob)
@@ -71,13 +79,14 @@ N = mob.num_people
 
 #n_indiv=np.ceil(mob_kwargs['num_people_unscaled']/mob_kwargs['downsample_pop'])
 n_seeds = {'expo': 3, 'iasy':4,'ipre':5} # select initial infected seeds
-num_test_random = 0 #number of random tests per day
-fraction_sym_obs = 0.5 #fraction of Symptomatic tested positive
+#n_seeds = {'expo': 10, 'iasy':10, 'ipre':10, 'isym':10}
+num_test_random = args.num_test_rnd #number of random tests per day
+fraction_sym_obs = args.frac_sym #fraction of Symptomatic tested positive
 initial_steps = args.ti #starting time of intervention
 delta_days = 1 # intervention every delta_days days (for the moment keep to 1)
 #assert initial_steps % delta_days == 0
-test_HH = False
-quarantine_HH = True
+test_HH = args.test_HH
+quarantine_HH = args.quar_HH
 adoption_fraction = args.af
 
 import sib,  scipy
@@ -87,6 +96,8 @@ import sib,  scipy
 from rankers import dotd_rank, greedy_rank, mean_field_rank, sib_rank
 from tqdm.notebook import tqdm
 from scipy.stats import gamma
+os.environ['NUMEXPR_MAX_THREADS'] = '8'
+os.environ['NUMEXPR_NUM_THREADS'] = '8'
 #sib.set_num_threads(6)
 
 #import matplotlib.pyplot as plt

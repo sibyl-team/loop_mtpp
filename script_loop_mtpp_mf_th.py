@@ -1,14 +1,11 @@
-import sys
-import os
+import sys, os
 
 sys.path.insert(0,'src/')
 sys.path.insert(0, '../sib/')
-sys.path.insert(0, '../simulator/sim/lib/') # we need distributions.py
 sys.path.insert(0, '../epidemic_mitigation/src/')
 simulator_path = "../simulator/sim/" ##change simulation path here 
 sys.path.insert(0,simulator_path)
 
-import random
 from pathlib import Path
 import numpy as np, pandas as pd
 #, matplotlib.pyplot as plt
@@ -21,7 +18,7 @@ from lib.mobilitysim import MobilitySimulator
 import loop_mtpp
 import rankers
 import argparse
-from distributions import CovidDistributions
+import random
 
 parser = argparse.ArgumentParser(description="Run Loop MTPP")
 parser.add_argument('-T', type=int, default=100, dest="T", help="max time")
@@ -29,8 +26,8 @@ parser.add_argument('--or', type=int, default=0, dest="num_test_rnd", help='numb
 parser.add_argument('--frac_sym', type=float, default=0.5, dest="frac_sym", help='fraction of symp observations')
 parser.add_argument('--test_HH', type = int, default = 0, dest="test_HH", help = "test households 1/0")
 parser.add_argument('--quarantine_HH', type = int, default = 1, dest="quar_HH", help = "quarantine households 1/0")
-parser.add_argument('--adp_frac', type=float, default=1.0, dest="af", help="adoption fraction of the app")
 parser.add_argument('--fn_rate', type=float, default=0.0, dest="fnr", help="false negative rate")
+parser.add_argument('--adp_frac', type=float, default=1.0, dest="af", help="adoption fraction of the app")
 parser.add_argument('-n', type=int, default=500, dest="obs", help="number of obs")
 parser.add_argument('-s', type=int, default=1, dest="seed", help="seed")
 parser.add_argument('-m', type=int, default=50, dest="seed_mob", help="seed mob")
@@ -38,14 +35,11 @@ parser.add_argument('-b', type=float, default=0.55, dest="beta", help="infection
 parser.add_argument('-i', type=int, default=7, dest="ti", help="waiting time before intervention")
 parser.add_argument('--tau', type=int, default=7, dest="tau", help="tau > 0 use \sum_t in tau b[t]. tau = 0 use prob[x = I]")
 parser.add_argument('--out', type=str, default="output", dest="output", help="output directory")
-
+parser.add_argument('-p', type=float, default=0.0, dest="prob_th", help="probability threshold for testing")
 args = parser.parse_args()
 
 #logging
 data_path = '../simulator/sim/lib/mobility/'
-
-distr = CovidDistributions("GER")
-#output_dir = "output_Tubingen_pop1_site1_rnd_" + str(args.num_test_rnd) + "/"
 output_dir = args.output + "/"
 
 fold_out = Path(output_dir)
@@ -65,6 +59,7 @@ with open(data_path + 'Tubingen_settings_pop1_site1.pk', 'rb') as fp:
 mob_kwargs["delta"] = 0.2554120904376099
 T = args.T
 seed_mob = args.seed_mob
+
 random.seed(seed_mob)
 np.random.seed(seed_mob)
 t_unit = 24
@@ -75,6 +70,8 @@ mob.verbose = True
 out = mob.simulate(max_time=max_time, seed=seed_mob)
 #contacts_df = pd.DataFrame(contacts_cg(mob, t_res, t_unit, first_filter = True),columns = ['i','j','t','deltat'])
 N = mob.num_people 
+os.environ['NUMEXPR_MAX_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 #print(N)
 #contacts_df = pd.DataFrame(contacts_cg(mob, t_res, t_unit, first_filter = False),columns = ['i','j','t','deltat'])
 
@@ -91,58 +88,139 @@ delta_days = 1 # intervention every delta_days days (for the moment keep to 1)
 test_HH = args.test_HH
 quarantine_HH = args.quar_HH
 adoption_fraction = args.af
+probability_th = args.prob_th
 
-import sib,  scipy
+import sib, scipy
 
 #from loop_ranker import sib_rank, sib_drop_rank, greedy_rank, dotd_rank, mean_field_rank, tracing_rank, winbp_rank, winbp_prob0_rank
+
 from rankers import dotd_rank, greedy_rank, mean_field_rank, sib_rank
 from tqdm.notebook import tqdm
 from scipy.stats import gamma
-os.environ['NUMEXPR_MAX_THREADS'] = '16'
-os.environ['NUMEXPR_NUM_THREADS'] = '16'
-sib.set_num_threads(16)
+#sib.set_num_threads(6)
 
 #import matplotlib.pyplot as plt
 
 mu = 1/12
 prob_seed = 1/N
 prob_sus = 0.5
+pautoinf = 1e-10
 pseed = prob_seed / (2 - prob_seed)
 psus = prob_sus * (1 - pseed)
-#if adoption_fraction < 1.0:
-#    pautoinf = 1e-4
-#else:
 pautoinf = 1e-6
-#pautoinf = 1e-6
 fp_rate = 0.0
-fn_rate = max(fnr, 1e-6)
+fn_rate = fnr
+tau = args.tau
 
 rankers = {}
 
-k_rec_gamma = 62.484380808876004
-scale_rec_gamma = 0.2992112296058585
-t0 = distr.incubation_mean_of_lognormal - distr.median_infectious_without_symptom
-alpha = 2.0
-tau =  args.tau
-rankers["BP_gamma"] = sib_rank.SibRanker(
+#rankers["no_intervention"] = None
+
+#rankers["dotd"] = dotd_rank.DotdRanker()
+
+
+rankers["MF"] = mean_field_rank.MeanFieldRanker(
+                tau = 5,
+                delta = 10,
+                mu = mu,
+                lamb = 1.0
+                )
+'''
+rankers["tracing"] = tracing_rank.TracingRanker(
+                 tau=5,
+                 lamb=1.0
+)
+'''
+#rankers["greedy"] = greedy_rank.GreedyRanker(
+#                 include_S = True,
+#                tau=10)
+
+
+"""
+rankers["winbp20prob0"] = winbp_prob0_rank.WinBPProb0Ranker(
                  params = sib.Params(
-                                 prob_i = sib.PiecewiseLinear(sib.RealParams(list(scipy.special.expit(alpha*(range(T+1) -t0*np.ones(T+1)))))), 
-                                 prob_r = sib.PiecewiseLinear(sib.RealParams(list(scipy.stats.gamma.sf(range(T+1), k_rec_gamma, scale=scale_rec_gamma)))),
+                                 prob_i = sib.Uniform(1.0),
+                                 prob_r = sib.Exponential(mu=mu),
+                                 #prob_i = sib.PriorDiscrete(list(0.25 * abm_utils.gamma_pdf_array(T+1,6,2.5))),
+                                 #prob_r = sib.PriorDiscrete(list(scipy.stats.gamma.sf(range(T+1), 10., scale=1.7452974337097158))),
+                                 #prob_i = sib.Uniform(0.014),
+                                 #prob_r = sib.Gamma(k = 10, mu = 1/1.7452974337097158),
                                  pseed = pseed,
                                  psus = psus,
+                                 fp_rate = fp_rate,
+                                 fn_rate = fn_rate,
+                                 pautoinf = pautoinf),
+                 maxit0 = 30,
+                 maxit1 = 30,
+                 damp0 = 0.5,
+                 damp1 = 0.9,
+                 tol = 1e-3,
+                 memory_decay = 1e-2,
+                 window_length = 20
+)
+
+
+
+
+rankers["winbp21_tau7"] = winbp_prob0_rank.WinBPProb0Ranker(
+                 params = sib.Params(
+                                 prob_i = sib.Cached(sib.Scaled(sib.PDF(sib.Gamma(k=5.76, mu=0.96)), scale=0.25), T+1),
+                                 prob_r = sib.Cached(sib.Gamma(k = 10, mu = 1/1.7452974337097158), T+1),
+                                 pseed = pseed,
+                                 psus = psus,
+                                 fp_rate = fp_rate,
+                                 fn_rate = fn_rate,
                                  pautoinf = pautoinf),
                  maxit0 = 20,
                  maxit1 = 20,
                  tol = 1e-3,
                  memory_decay = 1e-5,
                  window_length = 21,
-                 tau=tau,
-                 fnr=fn_rate,
-                 fpr=fp_rate,
+                 tau=7
 )
 
+rankers["winbp21_tau0"] = winbp_prob0_rank.WinBPProb0Ranker(
+                 params = sib.Params(
+                                 prob_i = sib.Cached(sib.Scaled(sib.PDF(sib.Gamma(k=5.76, mu=0.96)), scale=0.25), T+1),
+                                 prob_r = sib.Cached(sib.Gamma(k = 10, mu = 1/1.7452974337097158), T+1),
+                                 pseed = pseed,
+                                 psus = psus,
+                                 fp_rate = fp_rate,
+                                 fn_rate = fn_rate,
+                                 pautoinf = pautoinf),
+                 maxit0 = 20,
+                 maxit1 = 20,
+                 tol = 1e-3,
+                 memory_decay = 1e-5,
+                 window_length = 21,
+                 tau=0
+)
+"""
+
+#rankers["winbp21_uninf"] = winbp_prob0_rank.WinBPProb0Ranker(
+#                 params = sib.Params(
+#                                 prob_i = sib.Uniform(1.0), 
+#                                 prob_r = sib.Exponential(mu), 
+#                                 pseed = pseed,
+#                                 psus = psus,
+#                                 fp_rate = fp_rate,
+#                                 fn_rate = fn_rate,
+#                                 pautoinf = pautoinf),
+#                 maxit0 = 20,
+#                 maxit1 = 20,
+#                 tol = 1e-3,
+#                 memory_decay = 1e-5,
+#                 window_length = 21,
+#                 tau=0
+#)
+
+
+
 ress = {}
+#for num_test_algo in [300]: #number of test per day by ranking
+#    for seed in [22,23,33,32]:
 num_test_algo = args.obs
+
 print("Obs: ", num_test_algo, "n_seeds: ", n_seeds)
 for s in list(rankers.keys()):
     data = {"algo":s}
@@ -151,12 +229,11 @@ for s in list(rankers.keys()):
         country  = country,
         beta = beta,
         T = T,
-        seed=args.seed,
+        seed= args.seed,
         logger = logging.getLogger(f"iteration.{s}"),
         data = data,
         initial_counts = n_seeds,
         name_file_res = s + f"_N_{N}_T_{T}_obs_{num_test_algo}_sym_obs_{fraction_sym_obs}_seed_{seed_mob}",
-
         output_dir = output_dir,
         )
     else:
@@ -164,7 +241,7 @@ for s in list(rankers.keys()):
         rankers[s],
         country  = country,
         T = T,
-        seed=args.seed,
+        seed = args.seed,
         logger = logging.getLogger(f"iteration.{s}"),
         data = data,
         initial_steps = initial_steps, 
@@ -176,10 +253,11 @@ for s in list(rankers.keys()):
         fn_rate = fnr,
         test_HH = test_HH,
         quarantine_HH = quarantine_HH,
-        name_file_res = s + f"_N_{N}_T_{T}_obs_{num_test_algo}_ti_{initial_steps}_sym_obs_{fraction_sym_obs}_af_{adoption_fraction}_fnr_{fnr}_seed_{seed_mob}_tau_{tau}",
+        name_file_res = s + f"_N_{N}_T_{T}_obs_{num_test_algo}_ti_{initial_steps}_sym_obs_{fraction_sym_obs}_af_{adoption_fraction}_fnr_{fnr}_seed_{seed_mob}_pth_{probability_th}_tau_{tau}",
         output_dir = output_dir,
         save_every_iter = 1,
-        adoption_fraction = adoption_fraction
+        adoption_fraction = adoption_fraction,
+        probability_th = probability_th
         )
     ress[s] = res_s    
     del res_s
